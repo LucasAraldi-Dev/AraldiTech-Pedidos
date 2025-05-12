@@ -1,5 +1,5 @@
-# AraldiTech - Pedidos (Versão 0.8.2) 
-![GitHub version](https://img.shields.io/badge/version-0.8.2-blue)
+# AraldiTech - Pedidos (Versão 0.8.3) 
+![GitHub version](https://img.shields.io/badge/version-0.8.3-blue)
 
 ## Descrição
 **AraldiTech - Pedidos** é um WebApp desenvolvido para gerenciar pedidos de produtos para setores específicos, com interface moderna, intuitiva e responsiva, proporcionando uma experiência de uso otimizada.
@@ -26,14 +26,20 @@ Principais funcionalidades:
 - **Chart.js**: Biblioteca para criação de gráficos interativos no dashboard.
 
 ## Versão  
-A versão atual do projeto é **0.8.2**.
+A versão atual do projeto é **0.8.3**.
 
-### Mudanças Principais na Versão 0.8.2
-A versão 0.8.2 traz importantes clarificações e melhorias na interface:
+### Principais Alterações na Versão 0.8.3
 
-- **Padronização da Terminologia**: O campo "Data de Entrega" foi renomeado para "Data do Pedido" em toda a aplicação para maior consistência.
-- **Controle de Acesso Melhorado**: Agora somente administradores podem alterar a data do pedido, enquanto usuários comuns apenas visualizam o campo.
-- **Feedback de Interface**: Adicionadas mensagens informativas sobre as permissões para alteração da data do pedido.
+### Adicionado
+- **Tutorial Interativo**: Implementado sistema de tutorial passo a passo para novos usuários, apresentado automaticamente após o primeiro login.
+- **Botão de Ajuda**: Novo botão no menu principal para acesso rápido ao suporte e tutorial.
+
+### Melhorado
+- **Experiência de Primeiro Uso**: Fluxo aprimorado para novos usuários com orientações claras sobre as funcionalidades.
+- **Acessibilidade**: Interface de ajuda redesenhada para melhor usabilidade e acesso às informações.
+- **Documentação In-App**: Atualização das perguntas frequentes na Central de Ajuda com informações mais detalhadas.
+
+
 
 ## Funcionalidades
 - **Autenticação JWT**: Somente usuários autenticados têm permissão para criar, listar e editar pedidos.
@@ -76,7 +82,7 @@ A versão 0.8.2 traz importantes clarificações e melhorias na interface:
 
 5. Inicie o servidor FastAPI (backend):
     ```bash
-    uvicorn main:app --reload
+    uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
     ```
 
 6. Inicie o servidor Vue.js (frontend):
