@@ -112,23 +112,21 @@
           <div class="form-group">
             <label for="orderDeliveryDate">
               <i class="material-icons">event</i>
-              DATA DE ENTREGA
+              DATA DO PEDIDO
             </label>
             <div class="date-input-container">
               <input 
                 id="orderDeliveryDate" 
                 type="date" 
                 v-model="orderDeliveryDate" 
-                :min="minDate"
+                :disabled="!isAdmin"
                 required 
                 class="date-picker"
-                :class="{ 'invalid': validationErrors.deliveryDate }"
-                @change="validateDeliveryDate"
               />
               <i class="material-icons date-icon">calendar_today</i>
             </div>
             <div class="input-note">
-              Data mínima: hoje ({{ formattedMinDate }})
+              {{ isAdmin ? 'Como administrador, você pode alterar a data do pedido' : 'A data do pedido é preenchida automaticamente' }}
             </div>
           </div>
 
@@ -205,6 +203,31 @@
             <input id="orderSender" type="text" v-model="orderSender" required />
           </div>
 
+          <div class="form-group">
+            <label for="orderSenderSector">
+              <i class="material-icons">business</i>
+              SETOR DO RESPONSÁVEL
+            </label>
+            <select 
+              id="orderSenderSector" 
+              v-model="orderSenderSector" 
+              :disabled="!isAdminOrGestor"
+              required 
+            >
+              <option value="Escritório">Escritório</option>
+              <option value="Fábrica de Ração">Fábrica de Ração</option>
+              <option value="CPO">CPO</option>
+              <option value="Granjas">Granjas</option>
+              <option value="Abatedouro">Abatedouro</option>
+              <option value="Transporte">Transporte</option>
+              <option value="Incubatório">Incubatório</option>
+              <option value="Favorito">Favorito</option>
+            </select>
+            <div class="input-note" v-if="!isAdminOrGestor">
+              O setor é definido automaticamente com base no seu perfil
+            </div>
+          </div>
+
           <div class="form-group options-group full-width">
             <label class="toggle-container">
               <span class="toggle-label">
@@ -253,19 +276,19 @@ export default {
       orderDeliveryDate: new Date().toISOString().split('T')[0],
       orderNotes: "",
       orderSender: "",
+      orderSenderSector: "",
       orderFile: null,
       orderFileBase64: "",
       userEmail: null,
       userName: null,
+      userType: null,
+      userSector: null,
       token: null,
       createMultiple: false,
-      minDate: new Date().toISOString().split('T')[0],
-      formattedMinDate: new Date().toLocaleDateString(),
       isUrgencyTooltipVisible: false,
       isFileTooltipVisible: false,
       validationErrors: {
-        quantity: false,
-        deliveryDate: false
+        quantity: false
       },
       isMobile: false,
       tooltipStyle: {
@@ -278,22 +301,25 @@ export default {
       }
     };
   },
+  computed: {
+    isAdminOrGestor() {
+      return this.userType === "admin" || this.userType === "gestor";
+    },
+    isAdmin() {
+      return this.userType === "admin";
+    }
+  },
   mounted() {
-    // Inicializar data mínima
-    const today = new Date();
-    this.minDate = today.toISOString().split('T')[0];
-    this.formattedMinDate = today.toLocaleDateString();
-    
-    // Validar data inicial
-    this.validateDeliveryDate();
-    
     // Obter informações do usuário do localStorage
     const userStr = localStorage.getItem("user");
     if (userStr) {
       try {
         const userObj = JSON.parse(userStr);
         this.userName = userObj.nome;
-        console.log("Nome do usuário carregado:", this.userName);
+        this.userType = userObj.tipo_usuario;
+        this.userSector = userObj.setor;
+        this.orderSenderSector = userObj.setor || ""; // Preenche automaticamente com o setor do usuário
+        console.log("Dados do usuário carregados:", this.userName, this.userType, this.userSector);
       } catch (e) {
         console.error("Erro ao parsear dados do usuário:", e);
       }
@@ -322,8 +348,15 @@ export default {
   },
   methods: {
     async handleCreateOrder() {
-      const toast = useToast();  // Instanciando o Toastification
+      const toast = useToast();
 
+      // Validar se usuário está logado
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        toast.error("É necessário estar autenticado para criar pedidos.");
+        return;
+      }
+      
       // Validar quantidade
       if (this.orderQuantity < 1) {
         this.orderQuantity = 1;
@@ -331,15 +364,10 @@ export default {
         toast.warning("A quantidade deve ser maior que zero!");
         return;
       }
-      
-      // Validar data de entrega
-      const selectedDate = new Date(this.orderDeliveryDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (selectedDate < today) {
-        this.validationErrors.deliveryDate = true;
-        toast.warning("A data de entrega não pode ser anterior à data atual!");
+
+      // Validar campos obrigatórios
+      if (!this.orderDescription || !this.orderQuantity || !this.orderSender || !this.orderCategory) {
+        toast.warning("Por favor, preencha todos os campos obrigatórios!");
         return;
       }
 
@@ -347,36 +375,40 @@ export default {
         toast.warning("Aguarde o processamento do arquivo antes de enviar o pedido.");
         return;
       }
-      
-      // Verifica novamente o token antes de enviar
+
+      // Usar o nome do usuário e setor do token
       this.token = localStorage.getItem("access_token");
       
-      if (!this.token) {
-        console.error("Usuário não autenticado.");
-        toast.error("É necessário estar autenticado para criar pedidos. Faça login novamente.");
-        return;
-      }
-      
-      // Obter o nome do usuário se ainda não tiver
       if (!this.userName) {
-        this.userName = localStorage.getItem("user_name");
-      }
-      
-      if (!this.orderDescription || !this.orderQuantity || !this.orderSender || !this.orderCategory) {
-        toast.warning("Por favor, preencha todos os campos obrigatórios!");
-        return;
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+          try {
+            const userObj = JSON.parse(userStr);
+            this.userName = userObj.nome;
+            this.userSector = userObj.setor;
+          } catch (e) {
+            console.error("Erro ao parsear dados do usuário:", e);
+          }
+        }
       }
 
+      // Preencher o campo de responsável automaticamente com o nome do usuário logado
+      if (!this.orderSender) {
+        this.orderSender = this.userName || "Usuário do sistema";
+      }
+
+      // Criar o payload para o pedido
       const payload = {
         descricao: this.orderDescription,
         quantidade: this.orderQuantity,
         categoria: this.orderCategory,
         urgencia: this.orderUrgency,
-        observacao: this.orderNotes,
-        deliveryDate: this.orderDeliveryDate,
+        deliveryDate: new Date().toISOString(), // Sempre usa a data e hora atual, ignorando o valor do input
+        observacao: this.orderNotes || "",
         sender: this.orderSender,
-        usuario_nome: this.userName || "Usuário do Sistema",  
-        file: this.orderFileBase64,
+        setor: this.orderSenderSector,
+        usuario_nome: this.userName || "Usuário do Sistema",
+        file: this.orderFileBase64 || null,
         status: "Pendente",
       };
 
@@ -426,6 +458,7 @@ export default {
       this.orderDeliveryDate = new Date().toISOString().split('T')[0];
       this.orderNotes = "";
       this.orderSender = "";
+      this.orderSenderSector = "";
       this.orderFile = null;
       this.orderFileBase64 = "";
     },
@@ -483,13 +516,6 @@ export default {
       } else {
         this.validationErrors.quantity = false;
       }
-    },
-    validateDeliveryDate() {
-      const selectedDate = new Date(this.orderDeliveryDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      this.validationErrors.deliveryDate = selectedDate < today;
     },
     showUrgencyTooltip(event) {
       this.isUrgencyTooltipVisible = true;

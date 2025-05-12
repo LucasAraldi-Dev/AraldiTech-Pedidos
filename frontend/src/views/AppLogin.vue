@@ -165,19 +165,12 @@ export default {
         localStorage.setItem("token_type", token_type);
         localStorage.setItem("tipo_usuario", tipo_usuario || "comum");
         
-        // Passo 3: Carregando informações do usuário
-        currentStep.value = 3;
-        statusMessage.value = "Preparando seu ambiente...";
-        
         // Armazenando o modelo completo do usuário
         const userModel = {
           nome: nome,
           tipo_usuario: tipo_usuario || "comum",
           username: username.value
         };
-        
-        // Simular um tempo de carregamento (2 segundos)
-        await new Promise(resolve => setTimeout(resolve, 2000));
         
         console.log("Modelo de usuário a ser salvo:", userModel);
         localStorage.setItem("user", JSON.stringify(userModel));
@@ -187,11 +180,10 @@ export default {
         isLoggingIn.value = false;
         loginSuccess.value = true;
         
-        // Redirecionar após 3 segundos
+        // Redirecionar diretamente para o Menu em vez da tela de carregamento
         setTimeout(() => {
           try {
-            // Redirecionar para a tela de carregamento
-            window.location.href = '/#/loading';
+            window.location.href = '/#/menu';
           } catch (navError) {
             console.error("Erro durante navegação:", navError);
             window.location.href = '/';
@@ -270,29 +262,36 @@ export default {
       // e sincronizar quando a conexão voltar
     };
 
-    const handleSignup = async (userData) => {
+    const handleSignup = async (userData, callback) => {
       try {
-        await axios.post(`${process.env.VUE_APP_API_URL}/usuarios/`, {
-          ...userData,
-          tipo_usuario: "comum",
-        });
-
-        // Após o cadastro, armazenar o modelo do usuário
-        const userModel = {
-          nome: userData.nome,
-          tipo_usuario: "comum",
-          username: userData.username
-        };
-        localStorage.setItem("user", JSON.stringify(userModel));
-
+        const response = await axios.post(
+          `${process.env.VUE_APP_API_URL}/usuarios/`,
+          userData
+        );
+        
+        console.log("Usuário cadastrado com sucesso:", response.data);
+        
+        // Chamar o callback com sucesso se existir
+        if (typeof callback === 'function') {
+          callback(true);
+        }
+        
         // Não exibir toast aqui, já que o card de sucesso no RegisterModal 
         // mostrará as informações do usuário cadastrado
         // O modal permanecerá aberto até que o usuário escolha fechá-lo
         // ou clicar em "Fazer Login"
       } catch (error) {
-        console.error(error);
-        toast.error("Erro ao cadastrar usuário. Por favor, tente novamente.");
-        isModalOpen.value = false; // Fecha o modal apenas em caso de erro
+        console.error("Erro ao cadastrar usuário:", error);
+        
+        // Chamar o callback com erro se existir
+        if (typeof callback === 'function') {
+          const errorMessage = error.response?.data?.detail || "Erro na conexão com o servidor";
+          callback(false, new Error(errorMessage));
+        }
+        
+        // Exibir mensagem de erro usando toast
+        toast.error(error.response?.data?.detail || "Erro ao cadastrar usuário. Por favor, tente novamente.");
+        // Não fechar o modal em caso de erro para permitir nova tentativa
       }
     };
 

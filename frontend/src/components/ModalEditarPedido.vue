@@ -82,23 +82,21 @@
           <div class="form-group">
             <label for="orderDeliveryDate">
               <i class="material-icons">event</i>
-              DATA DE ENTREGA
+              DATA DO PEDIDO
             </label>
             <div class="date-input-container">
               <input 
                 id="orderDeliveryDate" 
                 type="date" 
                 v-model="orderDeliveryDate" 
-                :min="minDate"
+                :disabled="!isAdmin"
                 required 
                 class="date-picker"
-                :class="{ 'invalid': validationErrors.deliveryDate }"
-                @change="validateDeliveryDate"
               />
               <i class="material-icons date-icon">calendar_today</i>
             </div>
             <div class="input-note">
-              Data mínima: hoje ({{ formattedMinDate }})
+              {{ isAdmin ? 'Como administrador, você pode alterar a data do pedido' : 'A data do pedido só pode ser alterada por administradores' }}
             </div>
           </div>
 
@@ -120,6 +118,31 @@
               RESPONSÁVEL PELA COMPRA
             </label>
             <input id="orderSender" type="text" v-model="orderSender" required />
+          </div>
+
+          <div class="form-group">
+            <label for="orderSenderSector">
+              <i class="material-icons">business</i>
+              SETOR DO RESPONSÁVEL
+            </label>
+            <select 
+              id="orderSenderSector" 
+              v-model="orderSenderSector" 
+              :disabled="!isAdminOrGestor"
+              required 
+            >
+              <option value="Escritório">Escritório</option>
+              <option value="Fábrica de Ração">Fábrica de Ração</option>
+              <option value="CPO">CPO</option>
+              <option value="Granjas">Granjas</option>
+              <option value="Abatedouro">Abatedouro</option>
+              <option value="Transporte">Transporte</option>
+              <option value="Incubatório">Incubatório</option>
+              <option value="Favorito">Favorito</option>
+            </select>
+            <div class="input-note" v-if="!isAdminOrGestor">
+              O setor é definido pelo sistema e só pode ser alterado por administradores ou gestores
+            </div>
           </div>
 
           <div class="form-group" v-if="orderStatus">
@@ -277,6 +300,7 @@ export default {
       orderDeliveryDate: new Date().toISOString().split('T')[0],
       orderNotes: "",
       orderSender: "",
+      orderSenderSector: "",
       orderStatus: "Pendente",
       // Novos campos para orçamento
       orderBudget: 0,
@@ -285,12 +309,10 @@ export default {
       orderBudgetNotes: "",
       userEmail: null,
       userName: null,
+      userType: null,
       token: null,
-      minDate: new Date().toISOString().split('T')[0],
-      formattedMinDate: new Date().toLocaleDateString(),
       validationErrors: {
         quantity: "",
-        deliveryDate: "",
         budget: "",
         realCost: ""
       },
@@ -300,17 +322,14 @@ export default {
     };
   },
   mounted() {
-    // Inicializar data mínima
-    const today = new Date();
-    this.minDate = today.toISOString().split('T')[0];
-    this.formattedMinDate = today.toLocaleDateString();
-    
     // Obter informações do usuário do localStorage
     const userStr = localStorage.getItem("user");
     if (userStr) {
       try {
         const userObj = JSON.parse(userStr);
         this.userName = userObj.nome;
+        this.userType = userObj.tipo_usuario;
+        console.log("Tipo de usuário:", this.userType);
       } catch (e) {
         console.error("Erro ao parsear dados do usuário:", e);
       }
@@ -358,6 +377,12 @@ export default {
       if (this.budgetDifference > 0) return 'trending_down';
       if (this.budgetDifference < 0) return 'trending_up';
       return 'trending_flat';
+    },
+    isAdminOrGestor() {
+      return this.userType === "admin" || this.userType === "gestor";
+    },
+    isAdmin() {
+      return this.userType === "admin";
     }
   },
   watch: {
@@ -384,6 +409,7 @@ export default {
         
         this.orderNotes = this.pedido.observacao || "";
         this.orderSender = this.pedido.sender || "";
+        this.orderSenderSector = this.pedido.setor || "";
         this.orderStatus = this.pedido.status || "Pendente";
         
         // Novos campos de orçamento
@@ -421,17 +447,6 @@ export default {
         return;
       }
       
-      // Validar data de entrega
-      const selectedDate = new Date(this.orderDeliveryDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (selectedDate < today) {
-        this.validationErrors.deliveryDate = "A data de entrega não pode ser anterior à data atual!";
-        toast.warning("A data de entrega não pode ser anterior à data atual!");
-        return;
-      }
-      
       // Verificar token novamente
       this.token = localStorage.getItem("access_token");
       
@@ -456,6 +471,7 @@ export default {
         observacao: this.orderNotes,
         deliveryDate: this.orderDeliveryDate,
         sender: this.orderSender,
+        setor: this.orderSenderSector,
         usuario_nome: this.userName || "Usuário do Sistema",
         status: this.orderStatus,
         orcamento_previsto: this.orderBudget,
@@ -509,6 +525,21 @@ export default {
           campo_alterado: "Descrição",
           valor_anterior: this.pedido.descricao || "Não definida",
           valor_novo: novosDados.descricao
+        });
+      }
+      
+      // Verificar alteração na data do pedido (apenas para admins)
+      if (this.isAdmin && novosDados.deliveryDate !== this.pedido.deliveryDate) {
+        // Formatar as datas para exibição
+        const dataAnterior = this.formatarData(this.pedido.deliveryDate);
+        const dataNova = this.formatarData(novosDados.deliveryDate);
+        
+        registrosHistorico.push({
+          pedido_id: this.pedido.id,
+          usuario_nome: this.userName,
+          campo_alterado: "Data do Pedido",
+          valor_anterior: dataAnterior || "Não definida",
+          valor_novo: dataNova
         });
       }
       
@@ -589,6 +620,17 @@ export default {
         });
       }
       
+      // Verificar alteração no setor do responsável
+      if (novosDados.setor !== this.pedido.setor) {
+        registrosHistorico.push({
+          pedido_id: this.pedido.id,
+          usuario_nome: this.userName,
+          campo_alterado: "Setor do Responsável",
+          valor_anterior: this.pedido.setor || "Não definido",
+          valor_novo: novosDados.setor || "Não definido"
+        });
+      }
+      
       // Adicionar o histórico ao payload se houver alterações
       if (registrosHistorico.length > 0) {
         novosDados.historico = registrosHistorico;
@@ -613,13 +655,6 @@ export default {
         this.validationErrors.quantity = "";
       }
     },
-    validateDeliveryDate() {
-      const selectedDate = new Date(this.orderDeliveryDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      this.validationErrors.deliveryDate = selectedDate < today;
-    },
     validateBudget() {
       if (this.orderBudget < 0) {
         this.validationErrors.budget = "O orçamento não pode ser negativo";
@@ -638,7 +673,25 @@ export default {
     },
     formatarData(data) {
       if (!data) return "N/A";
-      return new Date(data).toLocaleDateString('pt-BR');
+      
+      try {
+        const d = new Date(data);
+        
+        // Verificar se a data é válida
+        if (isNaN(d.getTime())) {
+          console.warn(`Data inválida: ${data}`);
+          return 'Data inválida';
+        }
+        
+        return d.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      } catch (error) {
+        console.error(`Erro ao formatar data: ${data}`, error);
+        return 'Erro de formato';
+      }
     }
   },
 };
